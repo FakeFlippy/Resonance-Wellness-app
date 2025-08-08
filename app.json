@@ -1,8 +1,9 @@
 {
   "expo": {
-    "name": "Resonance Breath",
-    "slug": "resonance-breath-app",
+    "name": "SimpleBreathingApp",
+    "slug": "resonance-breathing",
     "version": "1.0.0",
+    "owner": "fakeflippy",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -25,6 +26,11 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "dc21705a-f03f-49e7-b6da-85d796433d76"
+      }
     }
   }
 }
