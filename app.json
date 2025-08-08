@@ -5,10 +5,8 @@
     "version": "1.0.0",
     "owner": "fakeflippy",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "splash": {
-      "image": "./assets/splash.png",
       "resizeMode": "contain",
       "backgroundColor": "#1a1a2e"
     },
@@ -20,13 +18,11 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#1a1a2e"
-      }
+      },
+      "package": "com.fakeflippy.resonancebreathing"
     },
-    "web": {
-      "favicon": "./assets/favicon.png"
-    },
+    "web": {},
     "extra": {
       "eas": {
         "projectId": "dc21705a-f03f-49e7-b6da-85d796433d76"
