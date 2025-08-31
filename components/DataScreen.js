@@ -7,9 +7,12 @@ import {
   StatusBar,
   ScrollView,
   Alert,
+  Modal,
 } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
+import { calculateAdvancedHRVMetrics, assessHRVQuality } from '../utils/HRVAnalysis';
+import HRVVisualization from './HRVVisualization';
 
 export default function DataScreen({ onBack }) {
   const [selectedFile, setSelectedFile] = useState(null);
@@ -17,6 +20,8 @@ export default function DataScreen({ onBack }) {
   const [isLoading, setIsLoading] = useState(false);
   const [chartData, setChartData] = useState(null);
   const [showChart, setShowChart] = useState(false);
+  const [showHRVVisualization, setShowHRVVisualization] = useState(false);
+  const [advancedHRVData, setAdvancedHRVData] = useState(null);
 
   const pickDocument = async () => {
     try {
@@ -200,18 +205,41 @@ export default function DataScreen({ onBack }) {
       console.log('Parsed data rows:', data.length);
       console.log('Sample row:', data[0]);
       
-      // Detect data type based on headers
-      const isSecondaryVitals = headers.includes('IBI (mS)') || headers.includes('IBI');
+      // Detect data type based on headers - optimized for user's CSV format
+      const isSecondaryVitals = headers.includes('IBI (mS)') || headers.includes('IBI') || 
+                               headers.includes('BV (mS)') || headers.includes('LVET (mS)');
       const isVitals = headers.includes('HeartRate (bpm)') || headers.includes('Systolic (mmHg)');
       
       let hrvMetrics = null;
+      let advancedHRV = null;
       if (isSecondaryVitals) {
-        // Extract IBI data for HRV analysis
-        const ibiColumn = headers.find(h => h.includes('IBI'));
+        // Extract IBI data for HRV analysis - prioritize exact column name
+        const ibiColumn = headers.find(h => h === 'IBI (mS)') || 
+                         headers.find(h => h.includes('IBI'));
+        
         if (ibiColumn) {
-          const ibiData = data.map(row => row[ibiColumn]).filter(val => val > 0);
-          hrvMetrics = calculateHRVMetrics(ibiData);
-          console.log('HRV Metrics calculated:', hrvMetrics);
+          // Filter out zero values and invalid entries more carefully
+          const ibiData = data
+            .map(row => row[ibiColumn])
+            .filter(val => val > 0 && val < 3000 && !isNaN(val)) // Typical IBI range 300-2000ms
+            .map(val => parseFloat(val));
+          
+          console.log(`Found ${ibiData.length} valid IBI values from column "${ibiColumn}"`);
+          console.log('IBI sample values:', ibiData.slice(0, 10));
+          
+          if (ibiData.length >= 10) {
+            hrvMetrics = calculateHRVMetrics(ibiData);
+            advancedHRV = calculateAdvancedHRVMetrics(ibiData);
+            console.log('Basic HRV Metrics:', hrvMetrics);
+            console.log('Advanced HRV Analysis:', advancedHRV);
+            
+            // Store advanced HRV data for visualization
+            setAdvancedHRVData(advancedHRV);
+          } else {
+            console.log('Insufficient IBI data for HRV analysis');
+          }
+        } else {
+          console.log('IBI column not found in headers:', headers);
         }
       }
       
@@ -219,7 +247,8 @@ export default function DataScreen({ onBack }) {
         headers, 
         data, 
         dataType: isSecondaryVitals ? 'secondary_vitals' : isVitals ? 'vitals' : 'unknown',
-        hrvMetrics 
+        hrvMetrics,
+        advancedHRV 
       };
     } catch (error) {
       console.error('CSV parsing error:', error);
@@ -311,7 +340,8 @@ export default function DataScreen({ onBack }) {
             avgY: (chartPoints.reduce((sum, p) => sum + p.y, 0) / chartPoints.length),
             hrvMetrics: parsedData.hrvMetrics,
             dataType: parsedData.dataType,
-            wellnessInsights
+            wellnessInsights,
+            hasAdvancedHRV: !!parsedData.advancedHRV
           });
           setShowChart(true);
         } else {
@@ -391,14 +421,15 @@ export default function DataScreen({ onBack }) {
           </View>
         )}
 
-        {/* HRV Analysis */}
+        {/* Enhanced HRV Analysis */}
         {showChart && chartData && chartData.hrvMetrics && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>❤️ HRV Analysis</Text>
+            <Text style={styles.sectionTitle}>❤️ Advanced HRV Analysis</Text>
             <Text style={styles.sectionDescription}>
-              Heart Rate Variability metrics calculated from IBI data
+              Comprehensive Heart Rate Variability analysis inspired by Kubios
             </Text>
             
+            {/* Basic HRV Metrics */}
             <View style={styles.hrvMetricsContainer}>
               <View style={styles.hrvMetricRow}>
                 <View style={styles.hrvMetric}>
@@ -426,6 +457,22 @@ export default function DataScreen({ onBack }) {
                 </View>
               </View>
               
+              {/* Advanced Metrics Display */}
+              {advancedHRVData && advancedHRVData.poincare && (
+                <View style={styles.hrvMetricRow}>
+                  <View style={styles.hrvMetric}>
+                    <Text style={styles.hrvMetricValue}>{advancedHRVData.poincare.sd1}</Text>
+                    <Text style={styles.hrvMetricLabel}>SD1 (ms)</Text>
+                    <Text style={styles.hrvMetricDesc}>Short-term variability</Text>
+                  </View>
+                  <View style={styles.hrvMetric}>
+                    <Text style={styles.hrvMetricValue}>{advancedHRVData.poincare.sd2}</Text>
+                    <Text style={styles.hrvMetricLabel}>SD2 (ms)</Text>
+                    <Text style={styles.hrvMetricDesc}>Long-term variability</Text>
+                  </View>
+                </View>
+              )}
+              
               <View style={styles.hrvSummary}>
                 <Text style={styles.hrvSummaryText}>
                   📊 Analysis based on {chartData.hrvMetrics.validSamples} valid IBI samples
@@ -433,8 +480,25 @@ export default function DataScreen({ onBack }) {
                 <Text style={styles.hrvSummaryText}>
                   💓 Mean IBI: {chartData.hrvMetrics.meanIBI} ms
                 </Text>
+                {advancedHRVData && (
+                  <Text style={styles.hrvSummaryText}>
+                    ⏱️ Recording duration: {advancedHRVData.rawData.duration}s
+                  </Text>
+                )}
               </View>
             </View>
+            
+            {/* Visualization Button */}
+            {chartData.hasAdvancedHRV && (
+              <View style={styles.buttonRow}>
+                <TouchableOpacity
+                  style={[styles.button, styles.visualizationButton]}
+                  onPress={() => setShowHRVVisualization(true)}
+                >
+                  <Text style={styles.buttonText}>📊 View HRV Visualizations</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
         )}
 
@@ -601,6 +665,20 @@ export default function DataScreen({ onBack }) {
         </View>
 
       </ScrollView>
+      
+      {/* HRV Visualization Modal */}
+      <Modal
+        visible={showHRVVisualization}
+        animationType="slide"
+        presentationStyle="fullScreen"
+      >
+        {advancedHRVData && (
+          <HRVVisualization
+            hrvData={advancedHRVData}
+            onClose={() => setShowHRVVisualization(false)}
+          />
+        )}
+      </Modal>
     </View>
   );
 }
@@ -814,5 +892,9 @@ const styles = StyleSheet.create({
     color: '#cccccc',
     marginBottom: 5,
     textAlign: 'center',
+  },
+  visualizationButton: {
+    backgroundColor: '#9C27B0',
+    flex: 1,
   },
 });
