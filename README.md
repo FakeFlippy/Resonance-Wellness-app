@@ -1,4 +1,4 @@
-# SimpleBreathingApp 🫁
+# Resonance Wellness App 🫁
 
 A React Native wellness application that combines guided breathing exercises with advanced heart rate variability (HRV) analysis for optimal health and stress management.
 
