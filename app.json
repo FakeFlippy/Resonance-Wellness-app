@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "SimpleBreathingApp",
-    "slug": "resonance-breathing",
+    "name": "Resonance Wellness",
+    "slug": "resonance-wellness",
     "version": "1.0.0",
     "owner": "fakeflippy",
     "orientation": "portrait",
@@ -20,7 +20,7 @@
       "adaptiveIcon": {
         "backgroundColor": "#1a1a2e"
       },
-      "package": "com.fakeflippy.resonancebreathing"
+      "package": "com.fakeflippy.resonancewellness"
     },
     "web": {},
     "extra": {

@@ -294,14 +294,21 @@ export default function DataScreen({ onBack }) {
       }
       
       if (parsedData) {
-        // Find numeric columns for charting
+        // Find numeric columns for charting - prioritize IBI column for secondary vitals
         const numericColumns = parsedData.headers.filter(header => {
           return parsedData.data.some(row => typeof row[header] === 'number');
         });
         
         if (numericColumns.length > 0) {
-          // Create simple chart data using first numeric column
-          const firstNumericCol = numericColumns[0];
+          // For secondary vitals, prioritize IBI column for main chart display
+          let firstNumericCol;
+          if (parsedData.dataType === 'secondary_vitals') {
+            const ibiColumn = parsedData.headers.find(h => h === 'IBI (mS)') || 
+                             parsedData.headers.find(h => h.includes('IBI'));
+            firstNumericCol = ibiColumn && numericColumns.includes(ibiColumn) ? ibiColumn : numericColumns[0];
+          } else {
+            firstNumericCol = numericColumns[0];
+          }
           const chartPoints = parsedData.data
             .map((row, index) => ({
               x: index,
@@ -426,7 +433,7 @@ export default function DataScreen({ onBack }) {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>❤️ Advanced HRV Analysis</Text>
             <Text style={styles.sectionDescription}>
-              Comprehensive Heart Rate Variability analysis inspired by Kubios
+              HRV insights into your heart's electrical activity and overall health.
             </Text>
             
             {/* Basic HRV Metrics */}
@@ -482,7 +489,7 @@ export default function DataScreen({ onBack }) {
                 </Text>
                 {advancedHRVData && (
                   <Text style={styles.hrvSummaryText}>
-                    ⏱️ Recording duration: {advancedHRVData.rawData.duration}s
+                    ⏱️ Recording duration: {(advancedHRVData.rawData.duration / 60).toFixed(1)} minutes
                   </Text>
                 )}
               </View>
@@ -594,7 +601,7 @@ export default function DataScreen({ onBack }) {
                     <Text style={styles.statLabel}>Minimum</Text>
                   </View>
                   <View style={styles.statItem}>
-                    <Text style={styles.statValue}>{((chartData.maxY + chartData.minY) / 2).toFixed(1)}</Text>
+                    <Text style={styles.statValue}>{chartData.avgY.toFixed(1)}</Text>
                     <Text style={styles.statLabel}>Average</Text>
                   </View>
                 </View>
