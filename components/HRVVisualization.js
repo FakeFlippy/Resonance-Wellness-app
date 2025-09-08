@@ -47,26 +47,6 @@ export default function HRVVisualization({ hrvData, onClose }) {
     return points;
   }, [ibiValues]);
 
-  const histogramData = useMemo(() => {
-    const binCount = 15;
-    const minVal = Math.min(...ibiValues);
-    const maxVal = Math.max(...ibiValues);
-    const binWidth = (maxVal - minVal) / binCount;
-    
-    const bins = Array(binCount).fill(0).map((_, i) => ({
-      start: minVal + i * binWidth,
-      end: minVal + (i + 1) * binWidth,
-      count: 0,
-      center: minVal + (i + 0.5) * binWidth
-    }));
-    
-    ibiValues.forEach(val => {
-      const binIndex = Math.min(Math.floor((val - minVal) / binWidth), binCount - 1);
-      bins[binIndex].count++;
-    });
-    
-    return bins;
-  }, [ibiValues]);
 
   const renderScatterPlot = () => {
     const maxY = Math.max(...scatterData.map(d => d.y));
@@ -135,7 +115,19 @@ export default function HRVVisualization({ hrvData, onClose }) {
         
         <View style={styles.chartInfo}>
           <Text style={styles.infoText}>
-            📊 {scatterData.length} IBI measurements • Range: {Math.round(minY)}-{Math.round(maxY)}ms
+            {scatterData.length} data points • Range: {minY.toFixed(0)}-{maxY.toFixed(0)}ms • Mean: {hrvData.timeDomain?.meanNN}ms
+          </Text>
+        </View>
+        
+        <View style={styles.explanationContainer}>
+          <Text style={styles.explanationTitle}>What This Shows:</Text>
+          <Text style={styles.explanationText}>
+            The IBI (Inter-Beat Interval) scatter plot displays your heart rate variability over time. Each point represents the time between consecutive heartbeats in milliseconds.
+          </Text>
+          <Text style={styles.explanationText}>
+            • <Text style={styles.highlight}>Higher variability</Text> (more scattered points) generally indicates better cardiovascular health and stress resilience{'\n'}
+            • <Text style={styles.highlight}>Lower variability</Text> (points in a tight line) may suggest stress, fatigue, or reduced autonomic function{'\n'}
+            • <Text style={styles.highlight}>Trends</Text> in the data can reveal patterns related to breathing, stress, or recovery states
           </Text>
         </View>
       </View>
@@ -232,76 +224,23 @@ export default function HRVVisualization({ hrvData, onClose }) {
             🎯 SD1: {hrvData.poincare?.sd1}ms • SD2: {hrvData.poincare?.sd2}ms • Ratio: {hrvData.poincare?.sd1sd2Ratio}
           </Text>
         </View>
-      </View>
-    );
-  };
-
-  const renderHistogram = () => {
-    const maxCount = Math.max(...histogramData.map(bin => bin.count));
-    
-    const padding = 40;
-    const plotWidth = chartWidth - 2 * padding;
-    const plotHeight = chartHeight - 2 * padding;
-    const barWidth = plotWidth / histogramData.length;
-
-    return (
-      <View style={styles.chartContainer}>
-        <Text style={styles.chartTitle}>IBI Histogram</Text>
-        <Text style={styles.chartSubtitle}>Distribution of Inter-Beat Intervals</Text>
         
-        <Svg width={chartWidth} height={chartHeight} style={styles.chart}>
-          {/* Background */}
-          <Rect x={0} y={0} width={chartWidth} height={chartHeight} fill="#0f0f1a" />
-          
-          {/* Grid lines */}
-          {[0, 0.25, 0.5, 0.75, 1].map(ratio => (
-            <Line
-              key={`grid-${ratio}`}
-              x1={padding}
-              y1={padding + ratio * plotHeight}
-              x2={padding + plotWidth}
-              y2={padding + ratio * plotHeight}
-              stroke="#333"
-              strokeWidth={0.5}
-            />
-          ))}
-          
-          {/* Histogram bars */}
-          {histogramData.map((bin, index) => {
-            const x = padding + index * barWidth;
-            const barHeight = (bin.count / maxCount) * plotHeight;
-            const y = padding + plotHeight - barHeight;
-            
-            return (
-              <Rect
-                key={index}
-                x={x + 1}
-                y={y}
-                width={barWidth - 2}
-                height={barHeight}
-                fill="#FF9800"
-                opacity={0.7}
-              />
-            );
-          })}
-          
-          {/* Y-axis labels */}
-          <SvgText x={15} y={padding + 5} fill="#888" fontSize="10">
-            {maxCount}
-          </SvgText>
-          <SvgText x={15} y={padding + plotHeight} fill="#888" fontSize="10">
-            0
-          </SvgText>
-        </Svg>
-        
-        <View style={styles.chartInfo}>
-          <Text style={styles.infoText}>
-            📊 {histogramData.length} bins • Peak: {maxCount} samples • Mean: {hrvData.timeDomain?.meanNN}ms
+        <View style={styles.explanationContainer}>
+          <Text style={styles.explanationTitle}>What This Shows:</Text>
+          <Text style={styles.explanationText}>
+            The Poincaré plot shows the correlation between consecutive heartbeats by plotting each RR interval against the next one.
+          </Text>
+          <Text style={styles.explanationText}>
+            • <Text style={styles.highlight}>SD1</Text> (width): Measures short-term variability, reflecting parasympathetic activity{'\n'}
+            • <Text style={styles.highlight}>SD2</Text> (length): Measures long-term variability, reflecting overall autonomic balance{'\n'}
+            • <Text style={styles.highlight}>Shape</Text>: A wider, more elliptical cloud indicates better HRV and autonomic balance{'\n'}
+            • <Text style={styles.highlight}>Tight cluster</Text>: May indicate stress, fatigue, or reduced heart rate variability
           </Text>
         </View>
       </View>
     );
   };
+
 
   const renderFrequencyDomain = () => {
     const { frequency } = hrvData;
@@ -357,6 +296,19 @@ export default function HRVVisualization({ hrvData, onClose }) {
             </View>
           </View>
         </View>
+        
+        <View style={styles.explanationContainer}>
+          <Text style={styles.explanationTitle}>What This Shows:</Text>
+          <Text style={styles.explanationText}>
+            Frequency domain analysis breaks down your heart rate variability into different frequency bands, each reflecting different aspects of your autonomic nervous system.
+          </Text>
+          <Text style={styles.explanationText}>
+            • <Text style={styles.highlight}>VLF (0.003-0.04 Hz)</Text>: Very low frequency, related to thermoregulation and hormonal influences{'\n'}
+            • <Text style={styles.highlight}>LF (0.04-0.15 Hz)</Text>: Low frequency, reflects both sympathetic and parasympathetic activity{'\n'}
+            • <Text style={styles.highlight}>HF (0.15-0.4 Hz)</Text>: High frequency, primarily parasympathetic activity and respiratory influence{'\n'}
+            • <Text style={styles.highlight}>LF/HF Ratio</Text>: Balance between sympathetic and parasympathetic systems (lower is generally better)
+          </Text>
+        </View>
       </View>
     );
   };
@@ -364,7 +316,6 @@ export default function HRVVisualization({ hrvData, onClose }) {
   const tabs = [
     { id: 'scatter', name: 'IBI Plot', icon: '📊' },
     { id: 'poincare', name: 'Poincaré', icon: '🎯' },
-    { id: 'histogram', name: 'Histogram', icon: '📈' },
     { id: 'frequency', name: 'Frequency', icon: '🌊' }
   ];
 
@@ -395,7 +346,6 @@ export default function HRVVisualization({ hrvData, onClose }) {
       <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
         {activeTab === 'scatter' && renderScatterPlot()}
         {activeTab === 'poincare' && renderPoincarePlot()}
-        {activeTab === 'histogram' && renderHistogram()}
         {activeTab === 'frequency' && renderFrequencyDomain()}
       </ScrollView>
     </View>
@@ -579,5 +529,29 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#888',
     textAlign: 'center',
+  },
+  explanationContainer: {
+    backgroundColor: '#16213e',
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: '#4CAF50',
+  },
+  explanationTitle: {
+    color: '#4CAF50',
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  explanationText: {
+    color: '#e0e6ed',
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 8,
+  },
+  highlight: {
+    color: '#4CAF50',
+    fontWeight: '600',
   },
 });
