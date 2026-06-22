@@ -31,6 +31,7 @@ from scipy.signal import find_peaks
 DEFAULT_COLUMN      = "filtered_10hz"
 MIN_PEAK_DIST_MS    = 300.0     # Reject any two peaks closer than this (ms)
 MIN_PEAK_PROM_FRAC  = 0.10      # Min prominence as fraction of amplitude range
+WARMUP_SAMPLES     = 200        # Skip first ~2 s (filter cold-start ramp)
 MIN_PEAK_HEIGHT_ABS = None      # Set to a fixed ADC value if needed
 MAX_PEAK_DIST_MS    = 2000.0    # Warn if gap between peaks exceeds this (ms)
 
@@ -61,7 +62,9 @@ def infer_fs(df: pd.DataFrame) -> float:
 # ── Peak detection ─────────────────────────────────────────────────────────────
 
 def detect_peaks(signal: np.ndarray, fs: float, column_name: str) -> dict:
-    amplitude_range = signal.max() - signal.min()
+    warmup = min(WARMUP_SAMPLES, len(signal) // 4)
+    steady = signal[warmup:]
+    amplitude_range = steady.max() - steady.min()
     prominence = max(MIN_PEAK_PROM_FRAC * amplitude_range, 10)
     min_dist_samples = int(MIN_PEAK_DIST_MS * fs / 1000.0)
 
@@ -72,7 +75,8 @@ def detect_peaks(signal: np.ndarray, fs: float, column_name: str) -> dict:
     if MIN_PEAK_HEIGHT_ABS is not None:
         kwargs["height"] = MIN_PEAK_HEIGHT_ABS
 
-    peaks, props = find_peaks(signal, **kwargs)
+    peaks_steady, props = find_peaks(steady, **kwargs)
+    peaks = peaks_steady + warmup
 
     return {
         "peaks":          peaks,
