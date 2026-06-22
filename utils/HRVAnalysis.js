@@ -38,11 +38,15 @@ export const calculateAdvancedHRVMetrics = (ibiData) => {
   // Poincaré Plot Metrics
   const poincareMetrics = calculatePoincareMetrics(successiveDiffs);
 
+  // Time-domain power analysis
+  const timePowerData = calculateTimeDomainPower(validIBI);
+
   return {
     timeDomain: timeMetrics,
     geometric: geometricMetrics,
     frequency: frequencyMetrics,
     poincare: poincareMetrics,
+    timePower: timePowerData,
     rawData: {
       ibiValues: validIBI,
       successiveDiffs: successiveDiffs,
@@ -119,21 +123,253 @@ const calculateGeometricMetrics = (ibiData, successiveDiffs) => {
 };
 
 /**
- * Calculate frequency domain metrics (simplified implementation)
+ * Calculate frequency domain metrics using FFT and PSD
  */
 const calculateFrequencyDomainMetrics = (ibiData) => {
-  // This is a simplified implementation
-  // In a full Kubios implementation, this would use FFT
-  
-  // Estimate power in different frequency bands
+  if (ibiData.length < 32) {
+    // Fallback to simplified method for short data
+    return calculateSimplifiedFrequencyMetrics(ibiData);
+  }
+
+  try {
+    // Convert IBI to RR intervals and interpolate for uniform sampling
+    const { interpolatedRR, sampleRate } = interpolateRRIntervals(ibiData);
+    
+    // Apply window function (Hanning window)
+    const windowedData = applyHanningWindow(interpolatedRR);
+    
+    // Perform FFT using custom implementation
+    const fftResult = performFFT(windowedData);
+    
+    // Calculate Power Spectral Density
+    const psd = calculatePSD(fftResult, sampleRate);
+    
+    // Integrate power in frequency bands
+    const frequencyBands = integratePowerBands(psd, sampleRate);
+    
+    return {
+      ...frequencyBands,
+      psdData: psd.slice(0, Math.floor(psd.length / 2)), // Only positive frequencies
+      sampleRate: sampleRate
+    };
+  } catch (error) {
+    console.warn('FFT calculation failed, using simplified method:', error);
+    return calculateSimplifiedFrequencyMetrics(ibiData);
+  }
+};
+
+/**
+ * Simplified frequency domain calculation (fallback)
+ */
+const calculateSimplifiedFrequencyMetrics = (ibiData) => {
   const meanIBI = ibiData.reduce((sum, val) => sum + val, 0) / ibiData.length;
   const variance = ibiData.reduce((sum, val) => sum + Math.pow(val - meanIBI, 2), 0) / ibiData.length;
   
-  // Rough approximations for frequency bands
   const totalPower = variance;
-  const vlfPower = totalPower * 0.3; // Very Low Frequency (0.003-0.04 Hz)
-  const lfPower = totalPower * 0.4;  // Low Frequency (0.04-0.15 Hz)
-  const hfPower = totalPower * 0.3;  // High Frequency (0.15-0.4 Hz)
+  const vlfPower = totalPower * 0.3;
+  const lfPower = totalPower * 0.4;
+  const hfPower = totalPower * 0.3;
+  const lfhfRatio = lfPower / hfPower;
+  
+  return {
+    totalPower: Math.round(totalPower),
+    vlfPower: Math.round(vlfPower),
+    lfPower: Math.round(lfPower),
+    hfPower: Math.round(hfPower),
+    lfhfRatio: Math.round(lfhfRatio * 100) / 100,
+    lfNorm: Math.round((lfPower / (lfPower + hfPower)) * 100 * 100) / 100,
+    hfNorm: Math.round((hfPower / (lfPower + hfPower)) * 100 * 100) / 100
+  };
+};
+
+/**
+ * Interpolate RR intervals to uniform sampling rate
+ */
+const interpolateRRIntervals = (ibiData) => {
+  // Convert IBI to cumulative time
+  const cumulativeTime = [0];
+  for (let i = 0; i < ibiData.length; i++) {
+    cumulativeTime.push(cumulativeTime[i] + ibiData[i] / 1000); // Convert ms to seconds
+  }
+  
+  // Target sample rate (8 Hz for better frequency resolution at 0.1 Hz)
+  const sampleRate = 8;
+  const totalDuration = cumulativeTime[cumulativeTime.length - 1];
+  const numSamples = Math.floor(totalDuration * sampleRate);
+  
+  const interpolatedRR = new Array(numSamples);
+  const timeStep = 1 / sampleRate;
+  
+  for (let i = 0; i < numSamples; i++) {
+    const targetTime = i * timeStep;
+    
+    // Find surrounding IBI values
+    let leftIndex = 0;
+    for (let j = 0; j < cumulativeTime.length - 1; j++) {
+      if (cumulativeTime[j] <= targetTime && targetTime < cumulativeTime[j + 1]) {
+        leftIndex = j;
+        break;
+      }
+    }
+    
+    // Linear interpolation
+    if (leftIndex < ibiData.length - 1) {
+      const t1 = cumulativeTime[leftIndex];
+      const t2 = cumulativeTime[leftIndex + 1];
+      const v1 = ibiData[leftIndex];
+      const v2 = ibiData[leftIndex + 1];
+      
+      const weight = (targetTime - t1) / (t2 - t1);
+      interpolatedRR[i] = v1 + weight * (v2 - v1);
+    } else {
+      interpolatedRR[i] = ibiData[ibiData.length - 1];
+    }
+  }
+  
+  return { interpolatedRR, sampleRate };
+};
+
+/**
+ * Apply Hanning window to reduce spectral leakage
+ */
+const applyHanningWindow = (data) => {
+  const N = data.length;
+  const windowedData = new Array(N);
+  
+  for (let i = 0; i < N; i++) {
+    const window = 0.5 * (1 - Math.cos(2 * Math.PI * i / (N - 1)));
+    windowedData[i] = data[i] * window;
+  }
+  
+  return windowedData;
+};
+
+/**
+ * Custom FFT implementation for React Native compatibility
+ */
+const performFFT = (data) => {
+  const N = data.length;
+  
+  // Ensure power of 2 length
+  const paddedLength = Math.pow(2, Math.ceil(Math.log2(N)));
+  const paddedData = new Array(paddedLength);
+  
+  for (let i = 0; i < paddedLength; i++) {
+    paddedData[i] = i < N ? [data[i], 0] : [0, 0]; // [real, imaginary]
+  }
+  
+  return cooleyTukeyFFT(paddedData);
+};
+
+/**
+ * Cooley-Tukey FFT algorithm implementation
+ */
+const cooleyTukeyFFT = (x) => {
+  const N = x.length;
+  
+  if (N <= 1) return x;
+  
+  // Divide
+  const even = new Array(N / 2);
+  const odd = new Array(N / 2);
+  
+  for (let i = 0; i < N / 2; i++) {
+    even[i] = x[2 * i];
+    odd[i] = x[2 * i + 1];
+  }
+  
+  // Conquer
+  const evenFFT = cooleyTukeyFFT(even);
+  const oddFFT = cooleyTukeyFFT(odd);
+  
+  // Combine
+  const result = new Array(N);
+  
+  for (let k = 0; k < N / 2; k++) {
+    const angle = -2 * Math.PI * k / N;
+    const twiddle = [Math.cos(angle), Math.sin(angle)];
+    
+    // Complex multiplication: twiddle * oddFFT[k]
+    const twiddledOdd = [
+      twiddle[0] * oddFFT[k][0] - twiddle[1] * oddFFT[k][1],
+      twiddle[0] * oddFFT[k][1] + twiddle[1] * oddFFT[k][0]
+    ];
+    
+    // Complex addition and subtraction
+    result[k] = [
+      evenFFT[k][0] + twiddledOdd[0],
+      evenFFT[k][1] + twiddledOdd[1]
+    ];
+    
+    result[k + N / 2] = [
+      evenFFT[k][0] - twiddledOdd[0],
+      evenFFT[k][1] - twiddledOdd[1]
+    ];
+  }
+  
+  return result;
+};
+
+/**
+ * Calculate Power Spectral Density from FFT result
+ */
+const calculatePSD = (fftResult, sampleRate) => {
+  const N = fftResult.length;
+  const psd = new Array(N);
+  
+  for (let i = 0; i < N; i++) {
+    const real = fftResult[i][0];
+    const imag = fftResult[i][1];
+    const magnitude = Math.sqrt(real * real + imag * imag);
+    psd[i] = (magnitude * magnitude) / (sampleRate * N);
+  }
+  
+  return psd;
+};
+
+/**
+ * Integrate power in VLF, LF, and HF frequency bands
+ */
+const integratePowerBands = (psd, sampleRate) => {
+  const N = psd.length;
+  const freqResolution = sampleRate / (2 * N);
+  
+  // Frequency band definitions (Hz)
+  const vlfRange = [0.003, 0.04];
+  const lfRange = [0.04, 0.15];
+  const hfRange = [0.15, 0.4];
+  
+  let vlfPower = 0;
+  let lfPower = 0;
+  let hfPower = 0;
+  
+  // Only use positive frequencies (first half of PSD)
+  const halfN = Math.floor(N / 2);
+  
+  // Define 0.167 Hz filter parameters (±0.01 Hz around 0.167 Hz)
+  const filterFreq = 0.167;
+  const filterBandwidth = 0.01; // ±10 mHz around 0.167 Hz
+  const filterLow = filterFreq - filterBandwidth;
+  const filterHigh = filterFreq + filterBandwidth;
+  
+  for (let i = 1; i < halfN; i++) {
+    const frequency = i * freqResolution;
+    const power = psd[i] * 2; // Multiply by 2 for single-sided spectrum
+    
+    // Check if frequency is in the 0.167 Hz filter range
+    const isFiltered = frequency >= filterLow && frequency <= filterHigh;
+    
+    if (frequency >= vlfRange[0] && frequency < vlfRange[1]) {
+      vlfPower += power;
+    } else if (frequency >= lfRange[0] && frequency < lfRange[1]) {
+      lfPower += power;
+    } else if (frequency >= hfRange[0] && frequency < hfRange[1] && !isFiltered) {
+      // Only add to HF power if NOT in the 0.167 Hz filter range
+      hfPower += power;
+    }
+  }
+  
+  const totalPower = vlfPower + lfPower + hfPower;
   const lfhfRatio = lfPower / hfPower;
   
   return {
@@ -338,4 +574,67 @@ export const assessHRVQuality = (hrvMetrics) => {
   }
   
   return assessments;
+};
+
+/**
+ * Calculate time-domain power analysis using sliding windows
+ */
+const calculateTimeDomainPower = (ibiData) => {
+  if (ibiData.length < 60) {
+    return null; // Need sufficient data for meaningful windows
+  }
+
+  const windowSizeSeconds = 30; // 30-second windows
+  const stepSizeSeconds = 5;    // 5-second steps (overlapping windows)
+  
+  // Convert IBI to cumulative time
+  const cumulativeTime = [0];
+  for (let i = 0; i < ibiData.length; i++) {
+    cumulativeTime.push(cumulativeTime[i] + ibiData[i] / 1000);
+  }
+  
+  const totalDuration = cumulativeTime[cumulativeTime.length - 1];
+  const timePoints = [];
+  
+  // Sliding window analysis
+  for (let t = windowSizeSeconds; t <= totalDuration - windowSizeSeconds; t += stepSizeSeconds) {
+    const windowStart = t - windowSizeSeconds;
+    const windowEnd = t;
+    
+    // Extract IBI data for this time window
+    const windowIBI = [];
+    for (let i = 0; i < ibiData.length; i++) {
+      const beatTime = cumulativeTime[i];
+      if (beatTime >= windowStart && beatTime < windowEnd) {
+        windowIBI.push(ibiData[i]);
+      }
+    }
+    
+    if (windowIBI.length >= 20) { // Minimum beats for reliable analysis
+      try {
+        // Calculate frequency metrics for this window
+        const windowFreq = calculateFrequencyDomainMetrics(windowIBI);
+        
+        timePoints.push({
+          time: t,
+          vlfPower: windowFreq.vlfPower || 0,
+          lfPower: windowFreq.lfPower || 0,
+          hfPower: windowFreq.hfPower || 0,
+          totalPower: windowFreq.totalPower || 0,
+          lfhfRatio: windowFreq.lfhfRatio || 0,
+          beatCount: windowIBI.length
+        });
+      } catch (error) {
+        // Skip this window if calculation fails
+        console.warn('Window analysis failed at time', t, error);
+      }
+    }
+  }
+  
+  return {
+    timePoints: timePoints,
+    windowSize: windowSizeSeconds,
+    stepSize: stepSizeSeconds,
+    totalDuration: totalDuration
+  };
 };

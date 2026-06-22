@@ -127,3 +127,25 @@ This project is open source and available under the [MIT License](LICENSE).
 ---
 
 **Built with ❤️ for better health and wellness**
+
+---
+
+## HRV Signal Processing Pipeline
+
+A separate step-by-step signal processing pipeline has been added for the custom nRF52840 pressure-sensor device. It handles raw data capture, filtering, peak detection, IBI extraction, artifact correction, and PSD/HRV analysis before any mobile app integration.
+
+See: [`hrv_pipeline/README.md`](hrv_pipeline/README.md)
+
+```
+hrv_pipeline/
+  arduino/   — Phase 1 & 2 Arduino sketches (raw capture + filtering)
+  scripts/   — Python analysis scripts (Phases 3–8)
+  data/      — place captured CSV files here
+  graphs/    — generated plots saved here
+```
+
+Quick start:
+```bash
+pip install numpy pandas matplotlib scipy
+python hrv_pipeline/scripts/analyze_raw_vs_filtered.py hrv_pipeline/data/raw_filtered_capture.csv
+```

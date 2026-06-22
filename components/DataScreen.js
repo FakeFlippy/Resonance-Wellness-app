@@ -10,7 +10,7 @@ import {
   Modal,
 } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { calculateAdvancedHRVMetrics, assessHRVQuality } from '../utils/HRVAnalysis';
 import HRVVisualization from './HRVVisualization';
 
@@ -75,7 +75,7 @@ export default function DataScreen({ onBack }) {
       
       // Read Excel file as base64
       const base64Data = await FileSystem.readAsStringAsync(fileUri, {
-        encoding: FileSystem.EncodingType.Base64,
+        encoding: 'base64',
       });
       
       console.log('XLSX file size (base64):', base64Data.length);
@@ -173,7 +173,7 @@ export default function DataScreen({ onBack }) {
       
       // Read CSV file as text
       const text = await FileSystem.readAsStringAsync(fileUri, {
-        encoding: FileSystem.EncodingType.UTF8,
+        encoding: 'utf8',
       });
       
       console.log('File content length:', text.length);
