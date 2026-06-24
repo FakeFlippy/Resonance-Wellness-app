@@ -1,11 +1,11 @@
-# HRV Device — Session Results Summary
+# HRV Device: Session Results Summary
 
 > **Session:** 60-second resting capture · **Date:** June 22, 2026  
 > **Device:** Custom-built pulse sensor + Seeed XIAO nRF52840 microcontroller
 
 ---
 
-## What We Built
+## Built Pipeline
 
 A small, custom biosensor device that measures your **pulse waveform** through a pressure sensor worn on the finger. The microcontroller reads the signal **500 times per second**, applies digital filters to clean up the noise in real-time on the chip itself, then streams the cleaned data to a computer over USB. A Python pipeline then extracts heartbeat timing and produces clinical-grade heart rate variability (HRV) metrics.
 
@@ -46,7 +46,7 @@ The raw output straight from the sensor, sampled 100 times per second. Each spik
 ### 2 — Raw vs Filtered Signal (first 5 seconds, zoomed)
 ![Zoomed filtered](graphs/06_zoomed_5s.png)
 
-This shows the same 5 seconds of data before and after filtering. **Top:** the raw signal — you can see the heartbeat peaks but they are rough and noisy. **Bottom:** after the on-device digital filters are applied, the waveform becomes smooth and each pulse bump is distinct and consistent. The three colored lines are three different filter settings tested simultaneously — they all agree closely, confirming the filter design is reliable. The cold-start dip at time 0 is the filter "warming up" in the first half-second.
+This shows the same 5 seconds of data before and after filtering. **Top:** the raw signal, you can see the heartbeat peaks but they are rough and noisy. **Bottom:** after the on-device digital filters are applied, the waveform becomes smooth and each pulse bump is distinct and consistent. The three colored lines are three different filter settings tested simultaneously — they all agree closely, confirming the filter design is reliable. The cold-start dip at time 0 is the filter "warming up" in the first half-second.
 
 ---
 
@@ -60,7 +60,7 @@ The algorithm automatically locates the top of each pulse wave and marks it with
 ### 4 — Beat-to-Beat Timing (Tachogram)
 ![IBI time series](graphs/40_ibi_time_series.png)
 
-Instead of showing the pulse waveform, this graph shows the **time gap between consecutive heartbeats** (called the Inter-Beat Interval, or IBI). If your heart was a perfectly steady metronome, this would be a flat line. It isn't — and that's healthy. The IBI varies between ~670 ms and ~1030 ms, fluctuating around the 805 ms average. This natural variability is what HRV analysis measures. A total absence of variation would actually indicate poor health.
+Instead of showing the pulse waveform, this graph shows the **time gap between consecutive heartbeats** (IBI). If your heart was a perfectly steady metronome, this would be a flat line. It isn't, and that's healthy. The IBI varies between ~670 ms and ~1030 ms, fluctuating around the 805 ms average. This natural variability is what HRV analysis measures. A total absence of variation would actually indicate poor health.
 
 ---
 
@@ -101,3 +101,6 @@ The red dashed line at 0.1 Hz marks the **target resonance frequency** for guide
 - Compare LF/HF ratio before vs during paced breathing
 - Add the **ear vibration component** (Vsb, ~115 Hz) and measure combined effect
 - Move data pipeline to **Bluetooth (BLE)** for wireless real-time feedback via mobile app
+- **FFT implementation** for frequency analysis
+- **Mobile app development** for guided breathing and real-time feedback
+- We got Time, we need frequency.
